@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres
+    container_name: nba-db
+    environment:
+      POSTGRES_USER: nba
+      POSTGRES_PASSWORD: nba
+      POSTGRES_DB: nbadb
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - nba_data:/var/lib/postgresql
+
+volumes:
+  nba_data:
