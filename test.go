@@ -71,5 +71,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Retrieved %d users\n", len(career_stats))
+	fmt.Printf("Retrieved %d career stats records\n", len(career_stats))
 }
