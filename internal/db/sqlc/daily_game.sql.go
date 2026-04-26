@@ -7,22 +7,16 @@ package db
 
 import (
 	"context"
-	"time"
 )
 
 const createDailyGame = `-- name: CreateDailyGame :one
 INSERT INTO daily_game (player_id, game_date)
-VALUES ($1, $2)
+VALUES ($1, CURRENT_DATE)
 RETURNING id, player_id, game_date, created_at
 `
 
-type CreateDailyGameParams struct {
-	PlayerID int32     `json:"player_id"`
-	GameDate time.Time `json:"game_date"`
-}
-
-func (q *Queries) CreateDailyGame(ctx context.Context, arg CreateDailyGameParams) (DailyGame, error) {
-	row := q.db.QueryRowContext(ctx, createDailyGame, arg.PlayerID, arg.GameDate)
+func (q *Queries) CreateDailyGame(ctx context.Context, playerID int32) (DailyGame, error) {
+	row := q.db.QueryRowContext(ctx, createDailyGame, playerID)
 	var i DailyGame
 	err := row.Scan(
 		&i.ID,
@@ -52,7 +46,7 @@ func (q *Queries) GetDailyGameByID(ctx context.Context, id int32) (DailyGame, er
 
 const getTodayGame = `-- name: GetTodayGame :one
 SELECT id, player_id, game_date, created_at FROM daily_game
-WHERE game_date = CURRENT_DATE
+WHERE game_date::date = CURRENT_DATE
 `
 
 func (q *Queries) GetTodayGame(ctx context.Context) (DailyGame, error) {

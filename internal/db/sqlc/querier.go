@@ -9,7 +9,7 @@ import (
 )
 
 type Querier interface {
-	CreateDailyGame(ctx context.Context, arg CreateDailyGameParams) (DailyGame, error)
+	CreateDailyGame(ctx context.Context, playerID int32) (DailyGame, error)
 	CreateGuess(ctx context.Context, arg CreateGuessParams) (Guess, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetAllPlayerNames(ctx context.Context) ([]GetAllPlayerNamesRow, error)

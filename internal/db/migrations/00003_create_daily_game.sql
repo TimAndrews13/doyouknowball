@@ -2,7 +2,7 @@
 CREATE TABLE daily_game (
     id          SERIAL PRIMARY KEY,
     player_id   INT NOT NULL,
-    game_date   DATE UNIQUE NOT NULL DEFAULT CURRENT_DATE,
+    game_date   TIMESTAMP UNIQUE NOT NULL DEFAULT NOW(),
     created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

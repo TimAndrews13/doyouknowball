@@ -13,6 +13,7 @@ import (
 	"github.com/timandrews/doyouknowball/internal/auth"
 	db "github.com/timandrews/doyouknowball/internal/db"
 	sqlc "github.com/timandrews/doyouknowball/internal/db/sqlc"
+	"github.com/timandrews/doyouknowball/internal/game"
 
 	_ "github.com/lib/pq"
 )
@@ -37,6 +38,9 @@ func main() {
 
 	http.HandleFunc("/register", app.handleRegister)
 	http.HandleFunc("/login", app.handleLogin)
+	http.HandleFunc("/game/setup", app.handleSetupDailyGame)
+	http.HandleFunc("/game/today", app.handleTodayGame)
+	http.HandleFunc("/game/guess", app.handleGuess)
 
 	fmt.Println("Server starting on :8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -120,4 +124,148 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": token})
+}
+
+func (a *App) handleSetupDailyGame(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := game.ScheduleDailyGame(r.Context(), a.queries); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "daily game set up successfully"})
+}
+
+func (a *App) handleTodayGame(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Validate JWT
+	claims, err := validateRequest(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	dailyGame, err := a.queries.GetTodayGame(r.Context())
+	if err != nil {
+		http.Error(w, "no game found for today", http.StatusNotFound)
+		return
+	}
+
+	stats, err := a.queries.GetPlayerCareerPath(r.Context(), int64(dailyGame.PlayerID))
+	if err != nil {
+		http.Error(w, "failed to get career path", http.StatusInternalServerError)
+		return
+	}
+
+	careerPath := game.BuildCareerPath(stats)
+
+	// Get user's guess count
+	guessCount, err := a.queries.GetGuessCount(r.Context(), sqlc.GetGuessCountParams{
+		UserID:      int32(claims.UserID),
+		DailyGameID: dailyGame.ID,
+	})
+	if err != nil {
+		http.Error(w, "failed to get guess count", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"career_path":       careerPath,
+		"guesses_remaining": game.MaxGuesses - int(guessCount),
+	})
+}
+
+func (a *App) handleGuess(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := validateRequest(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Guess string `json:"guess"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	dailyGame, err := a.queries.GetTodayGame(r.Context())
+	if err != nil {
+		http.Error(w, "no game found for today", http.StatusNotFound)
+		return
+	}
+
+	guessCount, err := a.queries.GetGuessCount(r.Context(), sqlc.GetGuessCountParams{
+		UserID:      int32(claims.UserID),
+		DailyGameID: dailyGame.ID,
+	})
+	if err != nil {
+		http.Error(w, "failed to get guess count", http.StatusInternalServerError)
+		return
+	}
+
+	if int(guessCount) >= game.MaxGuesses {
+		http.Error(w, "no guesses remaining", http.StatusForbidden)
+		return
+	}
+
+	player, err := a.queries.GetPlayerByID(r.Context(), int64(dailyGame.PlayerID))
+	if err != nil {
+		http.Error(w, "failed to get player", http.StatusInternalServerError)
+		return
+	}
+
+	isCorrect := game.CheckGuess(req.Guess, player.PLAYERNAME.String)
+
+	_, err = a.queries.CreateGuess(r.Context(), sqlc.CreateGuessParams{
+		UserID:      int32(claims.UserID),
+		DailyGameID: dailyGame.ID,
+		Guess:       req.Guess,
+		IsCorrect:   isCorrect,
+	})
+	if err != nil {
+		http.Error(w, "failed to save guess", http.StatusInternalServerError)
+		return
+	}
+
+	remaining := game.MaxGuesses - int(guessCount) - 1
+	response := map[string]interface{}{
+		"correct":           isCorrect,
+		"guesses_remaining": remaining,
+	}
+
+	if isCorrect || remaining == 0 {
+		response["answer"] = player.PLAYERNAME.String
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func validateRequest(r *http.Request) (*auth.Claims, error) {
+	tokenStr := r.Header.Get("Authorization")
+	if tokenStr == "" {
+		return nil, fmt.Errorf("missing token")
+	}
+	// Strip "Bearer " prefix if present
+	if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
+		tokenStr = tokenStr[7:]
+	}
+	return auth.ValidateToken(tokenStr)
 }

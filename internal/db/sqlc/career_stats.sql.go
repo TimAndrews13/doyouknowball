@@ -166,9 +166,9 @@ func (q *Queries) GetPlayerCareerPath(ctx context.Context, playerID int64) ([]Ge
 }
 
 const getRandomPlayer = `-- name: GetRandomPlayer :one
-SELECT DISTINCT "PLAYER_ID", "PLAYER_NAME"
+SELECT DISTINCT ON (random()) "PLAYER_ID", "PLAYER_NAME"
 FROM career_stats
-ORDER BY RANDOM()
+ORDER BY random()
 LIMIT 1
 `
 
