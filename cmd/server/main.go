@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -36,11 +37,15 @@ func main() {
 		queries: sqlc.New(conn),
 	}
 
-	http.HandleFunc("/register", app.handleRegister)
-	http.HandleFunc("/login", app.handleLogin)
-	http.HandleFunc("/game/setup", app.handleSetupDailyGame)
-	http.HandleFunc("/game/today", app.handleTodayGame)
-	http.HandleFunc("/game/guess", app.handleGuess)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+	http.HandleFunc("/", app.handleHome)
+	http.HandleFunc("/game", app.handleGamePage)
+	http.HandleFunc("/api/login", app.handleLogin)
+	http.HandleFunc("/api/register", app.handleRegister)
+	http.HandleFunc("/api/game/today", app.handleTodayGame)
+	http.HandleFunc("/api/game/guess", app.handleGuess)
+	http.HandleFunc("/api/game/setup", app.handleSetupDailyGame)
+	http.HandleFunc("/api/players/search", app.handlePlayerSearch)
 
 	fmt.Println("Server starting on :8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -268,4 +273,44 @@ func validateRequest(r *http.Request) (*auth.Claims, error) {
 		tokenStr = tokenStr[7:]
 	}
 	return auth.ValidateToken(tokenStr)
+}
+
+func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("web/templates/base.html", "web/templates/login.html"))
+	tmpl.ExecuteTemplate(w, "base", nil)
+}
+
+func (a *App) handleGamePage(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("web/templates/base.html", "web/templates/game.html"))
+	tmpl.ExecuteTemplate(w, "base", nil)
+}
+
+func (a *App) handlePlayerSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		json.NewEncoder(w).Encode([]struct{}{})
+		return
+	}
+
+	players, err := a.queries.SearchPlayers(r.Context(), "%"+q+"%")
+	if err != nil {
+		http.Error(w, "search failed", http.StatusInternalServerError)
+		return
+	}
+
+	type playerResult struct {
+		PlayerID   int64  `json:"player_id"`
+		PlayerName string `json:"player_name"`
+	}
+
+	results := make([]playerResult, len(players))
+	for i, p := range players {
+		results[i] = playerResult{
+			PlayerID:   p.PLAYERID,
+			PlayerName: p.PLAYERNAME.String,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }

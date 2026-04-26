@@ -183,3 +183,39 @@ func (q *Queries) GetRandomPlayer(ctx context.Context) (GetRandomPlayerRow, erro
 	err := row.Scan(&i.PLAYERID, &i.PLAYERNAME)
 	return i, err
 }
+
+const searchPlayers = `-- name: SearchPlayers :many
+SELECT DISTINCT "PLAYER_ID", "PLAYER_NAME"
+FROM career_stats
+WHERE LOWER("PLAYER_NAME") LIKE LOWER($1)
+ORDER BY "PLAYER_NAME" ASC
+LIMIT 10
+`
+
+type SearchPlayersRow struct {
+	PLAYERID   int64          `json:"PLAYER_ID"`
+	PLAYERNAME sql.NullString `json:"PLAYER_NAME"`
+}
+
+func (q *Queries) SearchPlayers(ctx context.Context, lower string) ([]SearchPlayersRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPlayers, lower)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchPlayersRow
+	for rows.Next() {
+		var i SearchPlayersRow
+		if err := rows.Scan(&i.PLAYERID, &i.PLAYERNAME); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -1,0 +1,145 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="game-container">
+    <h1>Who is this player?</h1>
+
+    <div id="career-path"></div>
+
+    <div class="guess-section">
+        <div class="autocomplete">
+            <input type="text" id="guess-input" placeholder="Search for a player..." oninput="searchPlayers()" />
+            <div id="dropdown" class="dropdown" style="display:none"></div>
+        </div>
+        <button onclick="submitGuess()">Guess</button>
+        <p id="guesses-remaining"></p>
+        <p id="guess-result"></p>
+    </div>
+
+    <div id="previous-guesses"></div>
+</div>
+
+<script>
+const token = localStorage.getItem('token');
+if (!token) window.location.href = '/';
+
+let selectedPlayer = '';
+let guessesRemaining = 3;
+let previousGuesses = [];
+let gameOver = false;
+
+async function loadGame() {
+    const res = await fetch('/api/game/today', {
+        headers: {'Authorization': 'Bearer ' + token}
+    });
+
+    if (res.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/';
+        return;
+    }
+
+    if (res.status === 404) {
+        document.getElementById('career-path').innerHTML = '<p>No game today, check back later!</p>';
+        return;
+    }
+
+    const data = await res.json();
+    guessesRemaining = data.guesses_remaining;
+    renderCareerPath(data.career_path.team_stops);
+    document.getElementById('guesses-remaining').textContent = `Guesses remaining: ${guessesRemaining}`;
+}
+
+function renderCareerPath(stops) {
+    const container = document.getElementById('career-path');
+    container.innerHTML = stops.map(stop => `
+        <div class="team-stop">
+            <h3>${stop.team_abbreviation} (${stop.start_year} - ${stop.end_year})</h3>
+            <div class="stats">
+                <span>GP: ${stop.gp}</span>
+                <span>PPG: ${stop.ppg}</span>
+                <span>RPG: ${stop.rpg}</span>
+                <span>APG: ${stop.apg}</span>
+                <span>SPG: ${stop.spg}</span>
+                <span>BPG: ${stop.bpg}</span>
+                <span>FG%: ${stop.fg_pct}%</span>
+                <span>3P%: ${stop.fg3_pct}%</span>
+                <span>FT%: ${stop.ft_pct}%</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function searchPlayers() {
+    const query = document.getElementById('guess-input').value;
+    if (query.length < 2) {
+        document.getElementById('dropdown').style.display = 'none';
+        return;
+    }
+
+    const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}`, {
+        headers: {'Authorization': 'Bearer ' + token}
+    });
+
+    const players = await res.json();
+    const dropdown = document.getElementById('dropdown');
+
+    if (!players || players.length === 0) {
+        dropdown.style.display = 'none';
+        return;
+    }
+
+    dropdown.innerHTML = players.map(p => `
+        <div class="dropdown-item" onclick="selectPlayer('${p.player_name}')">
+            ${p.player_name}
+        </div>
+    `).join('');
+    dropdown.style.display = 'block';
+}
+
+function selectPlayer(name) {
+    selectedPlayer = name;
+    document.getElementById('guess-input').value = name;
+    document.getElementById('dropdown').style.display = 'none';
+}
+
+async function submitGuess() {
+    if (gameOver || !selectedPlayer) return;
+
+    const res = await fetch('/api/game/guess', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({guess: selectedPlayer})
+    });
+
+    const data = await res.json();
+    guessesRemaining = data.guesses_remaining;
+    previousGuesses.push(selectedPlayer);
+    selectedPlayer = '';
+    document.getElementById('guess-input').value = '';
+
+    document.getElementById('guesses-remaining').textContent = `Guesses remaining: ${guessesRemaining}`;
+    renderPreviousGuesses();
+
+    if (data.correct) {
+        document.getElementById('guess-result').textContent = `Correct! The answer was ${data.answer}!`;
+        gameOver = true;
+    } else if (guessesRemaining === 0) {
+        document.getElementById('guess-result').textContent = `Out of guesses! The answer was ${data.answer}`;
+        gameOver = true;
+    } else {
+        document.getElementById('guess-result').textContent = `Wrong! Try again.`;
+    }
+}
+
+function renderPreviousGuesses() {
+    const container = document.getElementById('previous-guesses');
+    container.innerHTML = '<h3>Previous Guesses</h3>' +
+        previousGuesses.map(g => `<p class="previous-guess">❌ ${g}</p>`).join('');
+}
+
+loadGame();
+</script>
+{{end}}
