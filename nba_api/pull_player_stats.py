@@ -2,9 +2,12 @@ from nba_api.stats.endpoints import commonallplayers, playercareerstats
 import pandas as pd
 import time
 from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+import os
 
 # Connect to PostgreSQL
-engine = create_engine('postgresql://nba:nba@172.21.192.1:5432/nbadb')
+load_dotenv()
+engine = create_engine(os.getenv("DB_URL_PYTHON"))
 
 # Get all active players
 players = commonallplayers.CommonAllPlayers(is_only_current_season=1)
