@@ -1,31 +1,52 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="game-container">
-    <h1>Who is this player?</h1>
-
-    <div id="career-path"></div>
-
-    <div class="guess-section">
-        <div class="autocomplete">
-            <input type="text" id="guess-input" placeholder="Search for a player..." oninput="searchPlayers()" />
-            <div id="dropdown" class="dropdown" style="display:none"></div>
-        </div>
-        <button onclick="submitGuess()">Guess</button>
-        <p id="guesses-remaining"></p>
-        <p id="guess-result"></p>
+<div class="game-wrapper">
+    <div class="game-header">
+        <h1>Who is this player?</h1>
+        <p class="game-subtitle">Identify the player from their career path</p>
     </div>
 
-    <div id="previous-guesses"></div>
+    <div id="career-path" class="timeline"></div>
+
+    <div id="game-over-banner" class="game-over-banner" style="display:none"></div>
+
+    <div id="guess-area" class="guess-area">
+        <div class="autocomplete-wrapper">
+            <input
+                type="text"
+                id="guess-input"
+                placeholder="Search for a player..."
+                oninput="searchPlayers()"
+                onkeydown="handleKeyDown(event)"
+                autocomplete="off"
+            />
+            <div id="dropdown" class="dropdown" style="display:none"></div>
+        </div>
+        <button class="btn-primary" onclick="submitGuess()">Guess</button>
+    </div>
+
+    <div id="guess-status" class="guess-status"></div>
+    <div id="previous-guesses" class="previous-guesses"></div>
 </div>
 
 <script>
 const token = localStorage.getItem('token');
 if (!token) window.location.href = '/';
 
+const logoMap = {
+    "ATL": "atl", "BOS": "bos", "BKN": "bkn", "CHA": "cha", "CHI": "chi",
+    "CLE": "cle", "DAL": "dal", "DEN": "den", "DET": "det", "GSW": "gsw",
+    "HOU": "hou", "IND": "ind", "LAC": "lac", "LAL": "lal", "MEM": "mem",
+    "MIA": "mia", "MIL": "mil", "MIN": "min", "NOP": "no", "NYK": "ny",
+    "OKC": "okc", "ORL": "orl", "PHI": "phi", "PHX": "phx", "POR": "por",
+    "SAC": "sac", "SAS": "sa", "TOR": "tor", "UTA": "utah", "WAS": "wsh"
+};
+
 let selectedPlayer = '';
 let guessesRemaining = 3;
 let previousGuesses = [];
 let gameOver = false;
+let dropdownIndex = -1;
 
 async function loadGame() {
     const res = await fetch('/api/game/today', {
@@ -39,38 +60,69 @@ async function loadGame() {
     }
 
     if (res.status === 404) {
-        document.getElementById('career-path').innerHTML = '<p>No game today, check back later!</p>';
+        document.getElementById('career-path').innerHTML = '<p class="no-game">No game today — check back later!</p>';
+        document.getElementById('guess-area').style.display = 'none';
         return;
     }
 
     const data = await res.json();
     guessesRemaining = data.guesses_remaining;
     renderCareerPath(data.career_path.team_stops);
-    document.getElementById('guesses-remaining').textContent = `Guesses remaining: ${guessesRemaining}`;
+    updateGuessStatus();
+}
+
+function getLogoHTML(abbr) {
+    const espnAbbr = logoMap[abbr];
+    if (espnAbbr) {
+        return `<img src="/static/images/logos/${espnAbbr}.png" alt="${abbr}" class="team-logo" onerror="this.replaceWith(document.createTextNode('🏀'))">`;
+    }
+    return `<span class="team-logo-fallback">🏀</span>`;
 }
 
 function renderCareerPath(stops) {
     const container = document.getElementById('career-path');
-    container.innerHTML = stops.map(stop => `
-        <div class="team-stop">
-            <h3>${stop.team_abbreviation} (${stop.start_year} - ${stop.end_year})</h3>
-            <div class="stats">
-                <span>GP: ${stop.gp}</span>
-                <span>PPG: ${stop.ppg}</span>
-                <span>RPG: ${stop.rpg}</span>
-                <span>APG: ${stop.apg}</span>
-                <span>SPG: ${stop.spg}</span>
-                <span>BPG: ${stop.bpg}</span>
-                <span>FG%: ${stop.fg_pct}%</span>
-                <span>3P%: ${stop.fg3_pct}%</span>
-                <span>FT%: ${stop.ft_pct}%</span>
+    container.innerHTML = stops.map((stop, i) => `
+        <div class="timeline-item" style="animation-delay: ${i * 0.1}s">
+            <div class="timeline-connector ${i === 0 ? 'first' : ''}"></div>
+            <div class="timeline-dot"></div>
+            <div class="timeline-card">
+                <div class="timeline-card-header">
+                    ${getLogoHTML(stop.team_abbreviation)}
+                    <div class="timeline-team-info">
+                        <span class="team-abbr">${stop.team_abbreviation}</span>
+                        <span class="team-years">${stop.start_year} – ${stop.end_year}</span>
+                    </div>
+                    <span class="team-gp">${stop.gp} GP</span>
+                </div>
+                <div class="timeline-stats">
+                    <div class="stat-pill"><span class="stat-label">PPG</span><span class="stat-value">${stop.ppg}</span></div>
+                    <div class="stat-pill"><span class="stat-label">RPG</span><span class="stat-value">${stop.rpg}</span></div>
+                    <div class="stat-pill"><span class="stat-label">APG</span><span class="stat-value">${stop.apg}</span></div>
+                    <div class="stat-pill"><span class="stat-label">SPG</span><span class="stat-value">${stop.spg}</span></div>
+                    <div class="stat-pill"><span class="stat-label">BPG</span><span class="stat-value">${stop.bpg}</span></div>
+                    <div class="stat-pill"><span class="stat-label">FG%</span><span class="stat-value">${stop.fg_pct}%</span></div>
+                    <div class="stat-pill"><span class="stat-label">3P%</span><span class="stat-value">${stop.fg3_pct}%</span></div>
+                    <div class="stat-pill"><span class="stat-label">FT%</span><span class="stat-value">${stop.ft_pct}%</span></div>
+                </div>
             </div>
         </div>
     `).join('');
 }
 
+function updateGuessStatus() {
+    const el = document.getElementById('guess-status');
+    if (gameOver) return;
+    const dots = Array.from({length: 3}, (_, i) =>
+        `<span class="guess-dot ${i < (3 - guessesRemaining) ? 'used' : ''}"></span>`
+    ).join('');
+    el.innerHTML = `<div class="guess-dots">${dots}</div><span class="guess-label">${guessesRemaining} guess${guessesRemaining !== 1 ? 'es' : ''} remaining</span>`;
+}
+
 async function searchPlayers() {
     const query = document.getElementById('guess-input').value;
+    selectedPlayer = '';
+    dropdownIndex = -1;
+
     if (query.length < 2) {
         document.getElementById('dropdown').style.display = 'none';
         return;
@@ -88,12 +140,33 @@ async function searchPlayers() {
         return;
     }
 
-    dropdown.innerHTML = players.map(p => `
-        <div class="dropdown-item" onclick="selectPlayer('${p.player_name}')">
+    dropdown.innerHTML = players.map((p, i) => `
+        <div class="dropdown-item" data-index="${i}" onclick="selectPlayer('${p.player_name.replace(/'/g, "\\'")}')">
             ${p.player_name}
         </div>
     `).join('');
     dropdown.style.display = 'block';
+}
+
+function handleKeyDown(e) {
+    const dropdown = document.getElementById('dropdown');
+    const items = dropdown.querySelectorAll('.dropdown-item');
+
+    if (e.key === 'ArrowDown') {
+        dropdownIndex = Math.min(dropdownIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('highlighted', i === dropdownIndex));
+    } else if (e.key === 'ArrowUp') {
+        dropdownIndex = Math.max(dropdownIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('highlighted', i === dropdownIndex));
+    } else if (e.key === 'Enter') {
+        if (dropdownIndex >= 0 && items[dropdownIndex]) {
+            items[dropdownIndex].click();
+        } else {
+            submitGuess();
+        }
+    } else if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+    }
 }
 
 function selectPlayer(name) {
@@ -116,29 +189,55 @@ async function submitGuess() {
 
     const data = await res.json();
     guessesRemaining = data.guesses_remaining;
-    previousGuesses.push(selectedPlayer);
+    previousGuesses.push({name: selectedPlayer, correct: data.correct});
     selectedPlayer = '';
     document.getElementById('guess-input').value = '';
+    document.getElementById('dropdown').style.display = 'none';
 
-    document.getElementById('guesses-remaining').textContent = `Guesses remaining: ${guessesRemaining}`;
     renderPreviousGuesses();
 
     if (data.correct) {
-        document.getElementById('guess-result').textContent = `Correct! The answer was ${data.answer}!`;
         gameOver = true;
+        showGameOver(true, data.answer);
     } else if (guessesRemaining === 0) {
-        document.getElementById('guess-result').textContent = `Out of guesses! The answer was ${data.answer}`;
         gameOver = true;
+        showGameOver(false, data.answer);
     } else {
-        document.getElementById('guess-result').textContent = `Wrong! Try again.`;
+        updateGuessStatus();
     }
+}
+
+function showGameOver(correct, answer) {
+    const banner = document.getElementById('game-over-banner');
+    const guessArea = document.getElementById('guess-area');
+    const statusEl = document.getElementById('guess-status');
+
+    guessArea.style.display = 'none';
+    statusEl.style.display = 'none';
+
+    banner.style.display = 'block';
+    banner.className = `game-over-banner ${correct ? 'correct' : 'incorrect'}`;
+    banner.innerHTML = correct
+        ? `<span class="game-over-icon">🎉</span><div><strong>Correct!</strong><p>The answer was <strong>${answer}</strong></p></div>`
+        : `<span class="game-over-icon">😔</span><div><strong>Better luck tomorrow!</strong><p>The answer was <strong>${answer}</strong></p></div>`;
 }
 
 function renderPreviousGuesses() {
     const container = document.getElementById('previous-guesses');
-    container.innerHTML = '<h3>Previous Guesses</h3>' +
-        previousGuesses.map(g => `<p class="previous-guess">❌ ${g}</p>`).join('');
+    container.innerHTML = previousGuesses.map(g => `
+        <div class="previous-guess ${g.correct ? 'correct' : 'incorrect'}">
+            <span class="guess-icon">${g.correct ? '✅' : '❌'}</span>
+            <span>${g.name}</span>
+        </div>
+    `).join('');
 }
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.autocomplete-wrapper')) {
+        document.getElementById('dropdown').style.display = 'none';
+    }
+});
 
 loadGame();
 </script>
