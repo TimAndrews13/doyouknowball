@@ -60,7 +60,14 @@ header {
     height: 56px;
 }
 
-.header-left, .header-right { width: 40px; }
+.header-left { width: 40px; }
+
+.header-right {
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
 
 .logo {
     font-size: 1.3rem;

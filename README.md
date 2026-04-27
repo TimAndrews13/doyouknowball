@@ -10,7 +10,7 @@ A daily NBA player guessing game inspired by Wordle. Each day a random NBA playe
 2. A player's career path is shown — the teams they played for, the seasons, and their per-game stats for each stint
 3. Search for a player and submit your guess
 4. You have **3 guesses** to identify the player
-5. A new player is available every day
+5. A new player is available every day at 5am EST
 
 ---
 
@@ -28,7 +28,7 @@ A daily NBA player guessing game inspired by Wordle. Each day a random NBA playe
 
 **Frontend**
 - Go `html/template` — Server-side HTML rendering
-- Vanilla JavaScript (embedded in templates) — API calls, autocomplete dropdown, game interactions, dark mode toggle
+- Vanilla JavaScript (embedded in templates) — API calls, autocomplete dropdown, game interactions, dark mode toggle, logout
 - CSS custom properties — Light/dark mode theming
 
 **Data**
@@ -49,7 +49,7 @@ doyouknowball/
 │   ├── auth/
 │   │   └── auth.go           # JWT generation, password hashing
 │   ├── game/
-│   │   └── game.go           # Career path logic, guess checking
+│   │   └── game.go           # Career path logic, guess checking, daily scheduler
 │   └── db/
 │       ├── db.go             # Database connection
 │       ├── migrations/       # Goose migration files
@@ -57,17 +57,17 @@ doyouknowball/
 │       └── sqlc/             # sqlc generated Go code
 ├── data/
 │   ├── pull_player_stats.py  # Fetches NBA player stats into DB
-│   └── download_logos.py     # Downloads NBA team logos
+│   └── download_logos.py     # Downloads NBA team logos (only needed if logos are missing)
 ├── web/
 │   ├── templates/
-│   │   ├── base.html         # Shared layout, nav, dark mode
+│   │   ├── base.html         # Shared layout, nav, dark mode toggle, logout
 │   │   ├── login.html        # Login/register page
 │   │   └── game.html         # Main game page
 │   └── static/
 │       ├── css/
 │       │   └── style.css     # Styles, light/dark theme
 │       └── images/
-│           └── logos/        # NBA team logo PNGs
+│           └── logos/        # NBA team logo PNGs (included in repo)
 ├── .env                      # Environment variables (not committed)
 ├── docker-compose.yml        # PostgreSQL container
 ├── go.mod
@@ -119,24 +119,19 @@ pip install nba_api pandas sqlalchemy psycopg2-binary python-dotenv
 python3 data/pull_player_stats.py
 ```
 
-**6. Download team logos**
-
-> Skip this step if you cloned the repo — logos are already included in `web/static/images/logos/`. Only run this if logos are missing.
-```bash
-python3 data/download_logos.py
-```
-
-**7. Run the server**
+**6. Run the server**
 ```bash
 go run ./cmd/server/
 ```
 
-**8. Set up the daily game**
+**7. Set up the daily game**
 ```bash
 curl -X POST http://localhost:8080/api/game/setup
 ```
 
 Visit `http://localhost:8080` in your browser.
+
+> **Note:** Team logos are already included in the repo at `web/static/images/logos/`. You only need to run `data/download_logos.py` if logos are missing.
 
 ---
 
@@ -146,7 +141,7 @@ Visit `http://localhost:8080` in your browser.
 |--------|----------|------|-------------|
 | POST | `/api/register` | No | Create a new account |
 | POST | `/api/login` | No | Log in and receive a JWT |
-| GET | `/api/game/today` | Yes | Get today's career path and guess count |
+| GET | `/api/game/today` | Yes | Get today's career path, guess count, and previous guesses |
 | POST | `/api/game/guess` | Yes | Submit a guess |
 | POST | `/api/game/setup` | No | Set up today's daily game (manual trigger) |
 | GET | `/api/players/search?q=` | Yes | Search for players by name |
@@ -162,16 +157,26 @@ source venv/bin/activate
 python3 data/pull_player_stats.py
 ```
 
-The script will delete and re-insert stats for each player so trades and new seasons are always up to date.
+The script deletes and re-inserts stats for each player so trades and new seasons are always up to date.
+
+---
+
+## Daily Game Scheduler
+
+A new player is automatically selected every day at **5am EST**. The scheduler runs as a background goroutine when the server starts. For local development you can manually trigger a new game at any time:
+
+```bash
+curl -X POST http://localhost:8080/api/game/setup
+```
 
 ---
 
 ## Roadmap
 
-- [ ] Scheduled daily game picker (midnight EST)
-- [ ] Persist guess history across page refreshes
-- [ ] Handle already-completed games on page load
-- [ ] Logout button
+- [x] Scheduled daily game picker (5am EST)
+- [x] Persist guess history across page refreshes
+- [x] Handle already-completed games on page load
+- [x] Logout button
 - [ ] Mobile optimization
 - [ ] Player headshot reveal after correct guess
 - [ ] User stats dashboard (daily streak, win %, games played, guess distribution)

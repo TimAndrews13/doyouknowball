@@ -18,6 +18,9 @@
                 <button class="icon-btn" onclick="toggleDarkMode()" title="Toggle dark mode">
                     <span id="theme-icon">🌙</span>
                 </button>
+                <button class="icon-btn" id="logout-btn" onclick="logout()" title="Log out" style="display:none">
+                    ↩️
+                </button>
             </div>
         </div>
         <div class="header-border"></div>
@@ -34,11 +37,23 @@
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
         }
 
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/';
+        }
+
         // Load saved theme
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
+
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('theme-icon').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+            // Show logout button only if logged in
+            const token = localStorage.getItem('token');
+            if (token) {
+                document.getElementById('logout-btn').style.display = 'flex';
+            }
         });
     </script>
 </body>
