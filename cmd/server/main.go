@@ -237,6 +237,7 @@ func (a *App) handleTodayGame(w http.ResponseWriter, r *http.Request) {
 		"previous_guesses":  previousGuesses,
 		"is_complete":       isComplete,
 		"answer":            answer,
+		"player_id":         dailyGame.PlayerID,
 	})
 }
 
@@ -303,6 +304,7 @@ func (a *App) handleGuess(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"correct":           isCorrect,
 		"guesses_remaining": remaining,
+		"player_id":         dailyGame.PlayerID,
 	}
 
 	if isCorrect || remaining == 0 {

@@ -47,6 +47,7 @@ let guessesRemaining = 3;
 let previousGuesses = [];
 let gameOver = false;
 let dropdownIndex = -1;
+let currentPlayerID = null;
 
 async function loadGame() {
     const res = await fetch('/api/game/today', {
@@ -67,9 +68,9 @@ async function loadGame() {
 
     const data = await res.json();
     guessesRemaining = data.guesses_remaining;
+    currentPlayerID = data.player_id;
     renderCareerPath(data.career_path.team_stops);
 
-    // Restore previous guesses
     if (data.previous_guesses && data.previous_guesses.length > 0) {
         previousGuesses = data.previous_guesses.map(g => ({
             name: g.guess,
@@ -78,7 +79,6 @@ async function loadGame() {
         renderPreviousGuesses();
     }
 
-    // If game is already complete, show the game over banner
     if (data.is_complete) {
         gameOver = true;
         const wasCorrect = data.previous_guesses.some(g => g.is_correct);
@@ -206,6 +206,7 @@ async function submitGuess() {
 
     const data = await res.json();
     guessesRemaining = data.guesses_remaining;
+    currentPlayerID = data.player_id;
     previousGuesses.push({name: selectedPlayer, correct: data.correct});
     selectedPlayer = '';
     document.getElementById('guess-input').value = '';
@@ -232,11 +233,27 @@ function showGameOver(correct, answer) {
     guessArea.style.display = 'none';
     statusEl.style.display = 'none';
 
+    const headshotUrl = `https://cdn.nba.com/headshots/nba/latest/1040x760/${currentPlayerID}.png`;
+
     banner.style.display = 'block';
     banner.className = `game-over-banner ${correct ? 'correct' : 'incorrect'}`;
-    banner.innerHTML = correct
-        ? `<span class="game-over-icon">🎉</span><div><strong>Correct!</strong><p>The answer was <strong>${answer}</strong></p></div>`
-        : `<span class="game-over-icon">😔</span><div><strong>Better luck tomorrow!</strong><p>The answer was <strong>${answer}</strong></p></div>`;
+    banner.innerHTML = `
+        <div class="game-over-content">
+            <div class="game-over-headshot-wrapper">
+                <img
+                    src="${headshotUrl}"
+                    alt="${answer}"
+                    class="game-over-headshot"
+                    onerror="this.style.display='none'"
+                />
+            </div>
+            <div class="game-over-text">
+                <span class="game-over-icon">${correct ? '🎉' : '😔'}</span>
+                <strong>${correct ? 'Correct!' : 'Better luck tomorrow!'}</strong>
+                <p>The answer was <strong>${answer}</strong></p>
+            </div>
+        </div>
+    `;
 }
 
 function renderPreviousGuesses() {
@@ -249,7 +266,6 @@ function renderPreviousGuesses() {
     `).join('');
 }
 
-// Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.autocomplete-wrapper')) {
         document.getElementById('dropdown').style.display = 'none';
