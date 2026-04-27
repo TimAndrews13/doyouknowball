@@ -28,7 +28,7 @@ A daily NBA player guessing game inspired by Wordle. Each day a random NBA playe
 
 **Frontend**
 - Go `html/template` — Server-side HTML rendering
-- Vanilla JavaScript — Game interactions and API calls
+- Vanilla JavaScript (embedded in templates) — API calls, autocomplete dropdown, game interactions, dark mode toggle
 - CSS custom properties — Light/dark mode theming
 
 **Data**
@@ -120,6 +120,8 @@ python3 data/pull_player_stats.py
 ```
 
 **6. Download team logos**
+
+> Skip this step if you cloned the repo — logos are already included in `web/static/images/logos/`. Only run this if logos are missing.
 ```bash
 python3 data/download_logos.py
 ```
