@@ -187,10 +187,56 @@ func (a *App) handleTodayGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	guesses, err := a.queries.GetGuessesByUserAndGame(r.Context(), sqlc.GetGuessesByUserAndGameParams{
+		UserID:      int32(claims.UserID),
+		DailyGameID: dailyGame.ID,
+	})
+	if err != nil {
+		http.Error(w, "failed to get guesses", http.StatusInternalServerError)
+		return
+	}
+
+	type guessResult struct {
+		Guess     string `json:"guess"`
+		IsCorrect bool   `json:"is_correct"`
+	}
+
+	previousGuesses := make([]guessResult, len(guesses))
+	for i, g := range guesses {
+		previousGuesses[i] = guessResult{
+			Guess:     g.Guess,
+			IsCorrect: g.IsCorrect,
+		}
+	}
+
+	//Check if game is already complete
+	isComplete := false
+	answer := ""
+	if int(guessCount) >= game.MaxGuesses {
+		isComplete = true
+	}
+	for _, g := range guesses {
+		if g.IsCorrect {
+			isComplete = true
+		}
+	}
+
+	if isComplete {
+		player, err := a.queries.GetPlayerByID(r.Context(), int64(dailyGame.PlayerID))
+		if err != nil {
+			http.Error(w, "failed to get player", http.StatusInternalServerError)
+			return
+		}
+		answer = player.PLAYERNAME.String
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"career_path":       careerPath,
 		"guesses_remaining": game.MaxGuesses - int(guessCount),
+		"previous_guesses":  previousGuesses,
+		"is_complete":       isComplete,
+		"answer":            answer,
 	})
 }
 

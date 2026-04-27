@@ -68,7 +68,24 @@ async function loadGame() {
     const data = await res.json();
     guessesRemaining = data.guesses_remaining;
     renderCareerPath(data.career_path.team_stops);
-    updateGuessStatus();
+
+    // Restore previous guesses
+    if (data.previous_guesses && data.previous_guesses.length > 0) {
+        previousGuesses = data.previous_guesses.map(g => ({
+            name: g.guess,
+            correct: g.is_correct
+        }));
+        renderPreviousGuesses();
+    }
+
+    // If game is already complete, show the game over banner
+    if (data.is_complete) {
+        gameOver = true;
+        const wasCorrect = data.previous_guesses.some(g => g.is_correct);
+        showGameOver(wasCorrect, data.answer);
+    } else {
+        updateGuessStatus();
+    }
 }
 
 function getLogoHTML(abbr) {
