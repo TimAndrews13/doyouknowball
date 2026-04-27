@@ -4,6 +4,12 @@ A daily NBA player guessing game inspired by Wordle. Each day a random NBA playe
 
 ---
 
+## Motivation
+
+My friends and I are enthusiastic NBA Fans, and I wanted to build something that would both test our general NBA knowledge, while at the same time competing against one another.
+
+---
+
 ## How to Play
 
 1. Log in or create an account
@@ -86,7 +92,8 @@ doyouknowball/
 - [Goose](https://github.com/pressly/goose) — `go install github.com/pressly/goose/v3/cmd/goose@latest`
 - [sqlc](https://sqlc.dev/) — `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`
 
-### Setup
+### Usage
+### Quick Start
 
 **1. Clone the repo**
 ```bash
@@ -171,7 +178,7 @@ curl -X POST http://localhost:8080/api/game/setup
 
 ---
 
-## Roadmap
+## Contributing
 
 - [x] Scheduled daily game picker (5am EST)
 - [x] Persist guess history across page refreshes
