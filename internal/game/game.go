@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"fmt"
+	"time"
 
 	sqlc "github.com/timandrews/doyouknowball/internal/db/sqlc"
 )
@@ -139,4 +140,31 @@ func ScheduleDailyGame(ctx context.Context, queries *sqlc.Queries) error {
 	}
 
 	return nil
+}
+
+func StartDailyGameScheduler(ctx context.Context, queries *sqlc.Queries) {
+	go func() {
+		for {
+			now := time.Now()
+
+			// Calculate time until next midnight EST
+			est, _ := time.LoadLocation("America/New_York")
+			nowEST := now.In(est)
+			nextMidnight := time.Date(nowEST.Year(), nowEST.Month(), nowEST.Day()+1, 0, 0, 0, 0, est)
+			duration := nextMidnight.Sub(now)
+
+			select {
+			case <-time.After(duration):
+				if err := ScheduleDailyGame(ctx, queries); err != nil {
+					fmt.Println("scheduler error:", err)
+				} else {
+					fmt.Println("daily game scheduled successfully")
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	fmt.Println("daily game scheduler started")
 }

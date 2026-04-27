@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -36,6 +37,9 @@ func main() {
 		db:      conn,
 		queries: sqlc.New(conn),
 	}
+
+	ctx := context.Background()
+	game.StartDailyGameScheduler(ctx, app.queries)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	http.HandleFunc("/", app.handleHome)
