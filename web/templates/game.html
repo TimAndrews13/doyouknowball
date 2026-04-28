@@ -10,6 +10,8 @@
 
     <div id="game-over-banner" class="game-over-banner" style="display:none"></div>
 
+    <div id="stats-panel" class="stats-panel" style="display:none"></div>
+
     <div id="guess-area" class="guess-area">
         <div class="autocomplete-wrapper">
             <input
@@ -254,6 +256,61 @@ function showGameOver(correct, answer) {
             </div>
         </div>
     `;
+
+    loadStats();
+}
+
+async function loadStats() {
+    const res = await fetch('/api/stats', {
+        headers: {'Authorization': 'Bearer ' + token}
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    renderStats(data);
+}
+
+function renderStats(data) {
+    const panel = document.getElementById('stats-panel');
+    const maxDist = Math.max(data.guess_dist[1], data.guess_dist[2], data.guess_dist[3], 1);
+
+    panel.innerHTML = `
+        <h3 class="stats-title">Your Stats</h3>
+        <div class="stats-grid">
+            <div class="stat-box">
+                <span class="stat-box-value">${data.games_played}</span>
+                <span class="stat-box-label">Played</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-box-value">${data.win_pct}%</span>
+                <span class="stat-box-label">Win %</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-box-value">${data.play_streak}</span>
+                <span class="stat-box-label">Play Streak</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-box-value">${data.win_streak}</span>
+                <span class="stat-box-label">Win Streak</span>
+            </div>
+        </div>
+        <div class="guess-dist">
+            <h4 class="guess-dist-title">Guess Distribution</h4>
+            ${[1, 2, 3].map(n => `
+                <div class="dist-row">
+                    <span class="dist-label">${n}</span>
+                    <div class="dist-bar-wrapper">
+                        <div class="dist-bar" style="width: ${Math.max(data.guess_dist[n] / maxDist * 100, 5)}%">
+                            <span class="dist-count">${data.guess_dist[n]}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    panel.style.display = 'block';
 }
 
 function renderPreviousGuesses() {

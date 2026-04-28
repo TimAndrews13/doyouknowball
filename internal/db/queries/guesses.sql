@@ -13,3 +13,14 @@ ORDER BY created_at ASC;
 SELECT COUNT(*) FROM guesses
 WHERE user_id = $1
 AND daily_game_id = $2;
+
+-- name: GetUserGameHistory :many
+SELECT
+    dg.id as game_id,
+    dg.game_date,
+    COALESCE(bool_or(g.is_correct), false) as won,
+    COUNT(g.id) as guesses_used
+FROM daily_game dg
+JOIN guesses g ON g.daily_game_id = dg.id AND g.user_id = $1
+GROUP BY dg.id, dg.game_date
+ORDER BY dg.game_date DESC;

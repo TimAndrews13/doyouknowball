@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -50,6 +52,7 @@ func main() {
 	http.HandleFunc("/api/game/guess", app.handleGuess)
 	http.HandleFunc("/api/game/setup", app.handleSetupDailyGame)
 	http.HandleFunc("/api/players/search", app.handlePlayerSearch)
+	http.HandleFunc("/api/stats", app.handleStats)
 
 	fmt.Println("Server starting on :8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -365,4 +368,83 @@ func (a *App) handlePlayerSearch(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, err := validateRequest(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	history, err := a.queries.GetUserGameHistory(r.Context(), int32(claims.UserID))
+	if err != nil {
+		http.Error(w, "failed to get history", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate stats
+	gamesPlayed := len(history)
+	wins := 0
+	guessDist := map[int]int{1: 0, 2: 0, 3: 0}
+	playStreak := 0
+	winStreak := 0
+	maxWinStreak := 0
+
+	// History is orderd DESC so we calculate streaks from most recent
+	estLoc, _ := time.LoadLocation("America/New_York")
+	today := time.Now().In(estLoc).Truncate(24 * time.Hour)
+
+	for i, g := range history {
+		wonVal, _ := g.Won.(bool)
+		if wonVal {
+			wins++
+			guessesUsed := int(g.GuessesUsed)
+			if guessesUsed >= 1 && guessesUsed <= 3 {
+				guessDist[guessesUsed]++
+			}
+		}
+
+		// Play streak - check if consecutive days
+		gameDate := g.GameDate.In(estLoc).Truncate(24 * time.Hour)
+		expectedDate := today.AddDate(0, 0, -i)
+		if gameDate.Equal(expectedDate) {
+			playStreak++
+		} else {
+			break
+		}
+	}
+
+	// Win streak - separate pass
+	for _, g := range history {
+		wonVal, _ := g.Won.(bool)
+		if wonVal {
+			winStreak++
+			if winStreak > maxWinStreak {
+				maxWinStreak = winStreak
+			}
+		} else {
+			break
+		}
+	}
+
+	winPct := 0.0
+	if gamesPlayed > 0 {
+		winPct = math.Round(float64(wins)/float64(gamesPlayed)*100*10) / 10
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"games_played":   gamesPlayed,
+		"win_pct":        winPct,
+		"play_streak":    playStreak,
+		"win_streak":     winStreak,
+		"max_win_streak": maxWinStreak,
+		"guess_dist":     guessDist,
+	})
 }

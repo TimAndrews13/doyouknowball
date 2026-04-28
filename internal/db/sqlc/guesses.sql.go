@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
 const createGuess = `-- name: CreateGuess :one
@@ -87,6 +88,53 @@ func (q *Queries) GetGuessesByUserAndGame(ctx context.Context, arg GetGuessesByU
 			&i.Guess,
 			&i.IsCorrect,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserGameHistory = `-- name: GetUserGameHistory :many
+SELECT
+    dg.id as game_id,
+    dg.game_date,
+    COALESCE(bool_or(g.is_correct), false) as won,
+    COUNT(g.id) as guesses_used
+FROM daily_game dg
+JOIN guesses g ON g.daily_game_id = dg.id AND g.user_id = $1
+GROUP BY dg.id, dg.game_date
+ORDER BY dg.game_date DESC
+`
+
+type GetUserGameHistoryRow struct {
+	GameID      int32       `json:"game_id"`
+	GameDate    time.Time   `json:"game_date"`
+	Won         interface{} `json:"won"`
+	GuessesUsed int64       `json:"guesses_used"`
+}
+
+func (q *Queries) GetUserGameHistory(ctx context.Context, userID int32) ([]GetUserGameHistoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserGameHistory, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserGameHistoryRow
+	for rows.Next() {
+		var i GetUserGameHistoryRow
+		if err := rows.Scan(
+			&i.GameID,
+			&i.GameDate,
+			&i.Won,
+			&i.GuessesUsed,
 		); err != nil {
 			return nil, err
 		}
